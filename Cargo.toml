@@ -1,0 +1,21 @@
+[package]
+name = "lcas"
+version = "0.1.0"
+authors = [ "Taxrosdev" ]
+description = "A library for link addressed storage."
+repository = "https://github.com/timelessos/lcas"
+documentation = "https://docs.rs/lcas/"
+license = "MIT"
+keywords = [ "file-synchronization", "software-update", "content-addressable", "storage" ]
+readme = "README.md" 
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+walkdir = { version = "2.5.0", optional = true }
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+zstd = "0.13.3"
+
+[features]
+encoding = ["dep:walkdir"]
+decoding = []
