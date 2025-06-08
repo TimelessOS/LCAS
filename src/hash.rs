@@ -24,7 +24,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn hash_stable() {
         let result = hash(&vec![1, 2, 3]);
         assert_eq!(result, "16991689376074199867");
     }
