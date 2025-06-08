@@ -12,6 +12,7 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
 walkdir = { version = "2.5.0", optional = true }
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 zstd = "0.13.3"
@@ -19,3 +20,4 @@ zstd = "0.13.3"
 [features]
 encoding = ["dep:walkdir"]
 decoding = []
+https = []

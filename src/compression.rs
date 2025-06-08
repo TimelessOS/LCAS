@@ -1,7 +1,8 @@
 use std::io;
 
 // Compresses with ZSTD
-fn compress_file(input: &Vec<u8>, level: i32) -> Vec<u8> {
+#[cfg(feature = "encoding")]
+pub fn compress_file(input: &Vec<u8>, level: i32) -> Vec<u8> {
     let mut buf = Vec::new();
 
     let mut encoder = zstd::stream::Encoder::new(&mut buf, level).unwrap();
@@ -13,7 +14,8 @@ fn compress_file(input: &Vec<u8>, level: i32) -> Vec<u8> {
 }
 
 // Decompresses with ZSTD
-fn decompress_file(input: &mut Vec<u8>) -> Vec<u8> {
+#[cfg(feature = "decoding")]
+pub fn decompress_file(input: &mut Vec<u8>) -> Vec<u8> {
     use std::io::Read;
 
     let mut cursor = std::io::Cursor::new(input);
@@ -28,6 +30,7 @@ fn decompress_file(input: &mut Vec<u8>) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
     #[test]
     fn same_as_initial() {
         let original = vec![1, 2, 3, 4, 5];
