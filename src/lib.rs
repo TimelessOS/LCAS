@@ -1,9 +1,10 @@
 use std::{
-    fs::{self, File},
-    io::Read,
-    os::unix::fs::PermissionsExt,
+    fs::{self, create_dir_all, rename},
+    os::unix::fs::{PermissionsExt, symlink},
     path::Path,
 };
+
+use rand::RngCore;
 
 use crate::{artifacts::get_artifact, compression::decompress_file};
 
@@ -64,6 +65,7 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
     {
         use std::os::unix::fs::PermissionsExt;
 
+        let root_path = input_dir.to_string_lossy().to_string();
         let path = entry.path().to_string_lossy().to_string();
         let raw = fs::read(&path).expect("Couldn't read file for chunking!");
         let compressed = compression::compress_file(&raw, 3);
@@ -75,7 +77,7 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
         // Save the chunk
         fs::write(chunk_dir.join(&hash), compressed).expect("Couldn't write chunk file!");
 
-        files.push((path, hash, is_executable));
+        files.push((path.replacen(&root_path, "", 1), hash, is_executable));
     }
 
     let manifest = Manifest {
@@ -102,28 +104,64 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
 }
 
 pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_path: &Path) {
-    let chunk_dir = repo_cache_path.join("chunks");
-    let manifest_dir = repo_cache_path.join("manifests");
-    let artifacts_path = repo_cache_path.join("artifacts");
+    assert!(store_path.is_absolute(), "Store path must be absolute!");
+    assert!(
+        repo_cache_path.is_absolute(),
+        "Repo cache path must be absolute!"
+    );
 
-    let manifest_hash = get_artifact(artifact_name, &artifacts_path).unwrap();
+    let repo_manifest_dir = repo_cache_path.join("manifests");
+    let repo_artifacts_path = repo_cache_path.join("artifacts");
+
+    let store_chunk_dir = store_path.join("chunks");
+    let store_manifest_dir = store_path.join("manifests");
+    let store_artifacts_path = store_path.join("artifacts");
+
+    let manifest_hash =
+        get_artifact(artifact_name, &repo_artifacts_path).expect("Artifact not found");
 
     let manifest: Manifest = serde_json::from_str(
-        fs::read_to_string(manifest_dir.join(manifest_hash))
+        fs::read_to_string(repo_manifest_dir.join(&manifest_hash))
             .unwrap()
             .as_str(),
     )
     .unwrap();
 
-    for (path, hash, executable) in manifest.files {
+    for (_path, hash, executable) in &manifest.files {
         // Install chunks
         install_chunk(&hash, store_path, repo_cache_path).unwrap();
 
         // Make sure it's executable if it needs to be
-        if executable {
+        if *executable {
             make_chunk_executable(&hash, store_path);
         }
     }
+
+    // Seperate to ensure chunks have been installed prior to linked
+    for (manifest_defined_path, hash, _executable) in &manifest.files {
+        let manifest_defined_path = manifest_defined_path.trim_start_matches('/').to_string();
+
+        let path = store_manifest_dir
+            .join(&manifest_hash)
+            .join(manifest_defined_path);
+
+        if !path.parent().unwrap().exists() {
+            create_dir_all(&path.parent().unwrap()).unwrap();
+        }
+
+        if !fs::exists(&path).unwrap() {
+            symlink(store_chunk_dir.as_path().join(hash), path).unwrap();
+        }
+    }
+
+    // Create a temporary symlink for atomic update
+    let tmp_file_name = format!(".tmp_{}", rand::rng().next_u64());
+
+    let tmp_symlink = store_artifacts_path.join(&tmp_file_name);
+    let final_symlink = store_artifacts_path.join(artifact_name);
+
+    symlink(store_manifest_dir.join(&manifest_hash), &tmp_symlink).unwrap();
+    rename(&tmp_symlink, &final_symlink).unwrap();
 }
 
 fn make_chunk_executable(chunk_hash: &String, store_path: &Path) {
@@ -160,7 +198,9 @@ fn install_chunk(
         }
 
         fs::write(store_chunk_path, decompressed_chunk).unwrap();
-    }
 
-    Err("Couldn't find chunk".to_string())
+        Ok(())
+    } else {
+        Err("Couldn't find chunk".to_string())
+    }
 }

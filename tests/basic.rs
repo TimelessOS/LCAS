@@ -3,14 +3,16 @@ use std::{fs, path::Path};
 #[cfg(feature = "encoding")]
 #[test]
 fn main() {
+    use std::path::absolute;
+
     use lcas::{build, create_repo, create_store, install_artifact};
 
-    let input_dir = Path::new("./example_dir");
-    let repo_dir = Path::new("./example_repo");
-    let store_dir = Path::new("./example_store");
+    let input_dir = absolute(Path::new("./example_dir")).unwrap();
+    let repo_dir = absolute(Path::new("./example_repo")).unwrap();
+    let store_dir = absolute(Path::new("./example_store")).unwrap();
 
     if !repo_dir.exists() {
-        create_repo(repo_dir).unwrap();
+        create_repo(repo_dir.as_path()).unwrap();
     }
     if !store_dir.exists() {
         create_store(&store_dir).unwrap();
@@ -24,7 +26,12 @@ fn main() {
     )
     .unwrap();
 
-    build(input_dir, repo_dir, &"generic".to_string()).expect("Build Failure");
+    build(
+        input_dir.as_path(),
+        repo_dir.as_path(),
+        &"generic".to_string(),
+    )
+    .expect("Build Failure");
 
-    install_artifact(&"generic".to_string(), store_dir, &repo_dir);
+    install_artifact(&"generic".to_string(), store_dir.as_path(), &repo_dir);
 }
