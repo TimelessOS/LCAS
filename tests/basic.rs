@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-#[cfg(feature = "encoding")]
+#[cfg(all(feature = "encoding", feature = "decoding"))]
 #[test]
 fn main() {
     use std::path::absolute;
