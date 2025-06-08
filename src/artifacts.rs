@@ -18,6 +18,7 @@ fn read_artifacts_file(artifacts_file_path: &Path) -> Vec<(String, String)> {
     lines
 }
 
+#[cfg(feature = "decoding")]
 pub fn get_artifact(artifact_name: &String, artifacts_file_path: &Path) -> Option<String> {
     let artifacts = read_artifacts_file(artifacts_file_path);
 
@@ -30,6 +31,7 @@ pub fn get_artifact(artifact_name: &String, artifacts_file_path: &Path) -> Optio
         .map(|artifact| artifact.1.clone())
 }
 
+#[cfg(feature = "encoding")]
 pub fn add_artifact(artifact_name: String, manifest_hash: String, artifacts_file_path: &Path) {
     let mut artifacts: Vec<(String, String)> = read_artifacts_file(&artifacts_file_path)
         .iter()
@@ -43,6 +45,7 @@ pub fn add_artifact(artifact_name: String, manifest_hash: String, artifacts_file
         .expect("Couldn't write artifacts file");
 }
 
+#[cfg(feature = "encoding")]
 fn serialize_artifacts(artifacts: Vec<(String, String)>) -> String {
     let mut string = String::new();
 
@@ -60,6 +63,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
     fn simple_all() {
         let artifacts = vec![
             ("test1".to_string(), 1.to_string()),
@@ -86,6 +90,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
     fn get_artifact_not_found() {
         let artifact_file_path = temp_dir().join("LCAS_test_artifact_not_found.test");
         // Ensure file is empty
@@ -97,6 +102,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "encoding")]
     fn add_artifact_overwrites_existing() {
         let artifact_file_path = temp_dir().join("LCAS_test_artifact_overwrite.test");
         add_artifact(
@@ -132,6 +138,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "encoding")]
     fn simple_serialize_artifacts() {
         let artifacts = vec![
             ("test1".to_string(), 1.to_string()),

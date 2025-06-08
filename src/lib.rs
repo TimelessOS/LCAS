@@ -1,10 +1,4 @@
-use std::{
-    fs::{self, create_dir_all, rename},
-    os::unix::fs::{PermissionsExt, symlink},
-    path::Path,
-};
-
-use crate::artifacts::get_artifact;
+use std::{fs, path::Path};
 
 mod artifacts;
 mod compression;
@@ -30,6 +24,7 @@ pub fn create_repo(repo_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(feature = "decoding")]
 pub fn create_store(store_path: &Path) -> Result<(), String> {
     if store_path.exists() {
         return Err("Store already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
@@ -103,6 +98,10 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
 
 #[cfg(feature = "decoding")]
 pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_path: &Path) {
+    use crate::artifacts::get_artifact;
+    use std::fs::{create_dir_all, rename};
+    use std::os::unix::fs::symlink;
+
     assert!(store_path.is_absolute(), "Store path must be absolute!");
     assert!(
         repo_cache_path.is_absolute(),
@@ -163,6 +162,7 @@ pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_pa
     rename(&tmp_symlink, &final_symlink).unwrap();
 }
 
+#[cfg(feature = "decoding")]
 fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
     let potential = potential.unwrap_or_default();
 
@@ -175,7 +175,10 @@ fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
     };
 }
 
+#[cfg(feature = "decoding")]
 fn make_chunk_executable(chunk_hash: &String, store_path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
     let chunk_path = store_path.join("chunks").join(chunk_hash);
 
     // Read initial permissions first

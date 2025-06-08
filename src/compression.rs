@@ -1,8 +1,8 @@
-use std::io;
-
 // Compresses with ZSTD
 #[cfg(feature = "encoding")]
 pub fn compress_file(input: &Vec<u8>, level: i32) -> Vec<u8> {
+    use std::io;
+
     let mut buf = Vec::new();
 
     let mut encoder = zstd::stream::Encoder::new(&mut buf, level).unwrap();
