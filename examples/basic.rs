@@ -16,8 +16,8 @@ fn main() -> Result<()> {
     let store_dir = absolute(Path::new("./example_store"))?;
 
     // Create an example repo and a store, *locally*
-    create_repo(repo_dir.as_path())?;
-    create_store(&store_dir)?;
+    let _ = create_repo(repo_dir.as_path());
+    let _ = create_store(&store_dir);
 
     // Create an example artifact
     fs::create_dir_all(Path::new("./example_dir/nested_dir/super_nested_dir"))?;
@@ -47,4 +47,10 @@ fn main() -> Result<()> {
     use anyhow::bail;
 
     bail!("You need the encoding and decoding features to run this example");
+}
+
+#[test]
+#[cfg(all(feature = "encoding", feature = "decoding"))]
+fn test_example() {
+    main().unwrap();
 }
