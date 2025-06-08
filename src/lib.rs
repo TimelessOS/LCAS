@@ -1,10 +1,10 @@
 use std::{
+    env::temp_dir,
     fs::{self, create_dir_all, rename},
+    option,
     os::unix::fs::{PermissionsExt, symlink},
     path::Path,
 };
-
-use rand::RngCore;
 
 use crate::{artifacts::get_artifact, compression::decompress_file};
 
@@ -155,13 +155,25 @@ pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_pa
     }
 
     // Create a temporary symlink for atomic update
-    let tmp_file_name = format!(".tmp_{}", rand::rng().next_u64());
+    let tmp_file_name = get_temp_file(None, &store_artifacts_path);
 
     let tmp_symlink = store_artifacts_path.join(&tmp_file_name);
     let final_symlink = store_artifacts_path.join(artifact_name);
 
     symlink(store_manifest_dir.join(&manifest_hash), &tmp_symlink).unwrap();
     rename(&tmp_symlink, &final_symlink).unwrap();
+}
+
+fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
+    let potential = potential.unwrap_or_default();
+
+    let file_name = format!(".tmp_{}", &potential);
+
+    return if dir.join(&file_name).exists() {
+        get_temp_file(Some(potential + 1), dir)
+    } else {
+        file_name
+    };
 }
 
 fn make_chunk_executable(chunk_hash: &String, store_path: &Path) {
