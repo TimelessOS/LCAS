@@ -1,46 +1,64 @@
-use std::{fs, path::Path};
+use anyhow::Result;
+use anyhow::bail;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 mod artifacts;
 mod compression;
 mod hash;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct Manifest {
-    pub files: Vec<(String, String, bool)>, // (path, hash, executable)
-    pub format: u8,
+struct Manifest {
+    files: Vec<(String, String, bool)>, // (path, hash, executable)
+    format: u8,
 }
 
-// Creates a repo, or returns an Error if a repo already exists
+pub enum RepoType {
+    Local,
+    Https,
+}
+
+/// The cache directory is currently only used with networked based RepoType, but may be used a future release.
+pub struct Repo {
+    pub kind: RepoType,
+    pub path: String,
+    pub cache_path: Option<PathBuf>,
+}
+
+/// Creates a repo, or returns an Error if the repo already exists
 #[cfg(feature = "encoding")]
-pub fn create_repo(repo_dir: &Path) -> Result<(), String> {
+pub fn create_repo(repo_dir: &Path) -> Result<()> {
     if repo_dir.exists() {
-        return Err("Repo already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
+        bail!("Repo already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
     }
 
-    fs::create_dir_all(repo_dir).expect("Couldn't create repo!");
-    fs::create_dir_all(repo_dir.join("chunks")).expect("Couldn't create repo!");
-    fs::create_dir_all(repo_dir.join("manifests")).expect("Couldn't create repo!");
+    let _ = fs::create_dir_all(repo_dir.join("chunks"));
+    let _ = fs::create_dir_all(repo_dir.join("manifests"));
 
     Ok(())
 }
 
+/// Creates a store, or returns an Error if the store already exists
 #[cfg(feature = "decoding")]
-pub fn create_store(store_path: &Path) -> Result<(), String> {
+pub fn create_store(store_path: &Path) -> Result<()> {
     if store_path.exists() {
-        return Err("Store already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
+        bail!("Store already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
     }
 
-    fs::create_dir_all(store_path).expect("Couldn't create repo!");
-    fs::create_dir_all(store_path.join("chunks")).expect("Couldn't create repo!");
-    fs::create_dir_all(store_path.join("manifests")).expect("Couldn't create repo!");
-    fs::create_dir_all(store_path.join("artifacts")).expect("Couldn't create repo!");
+    fs::create_dir_all(store_path)?;
+    fs::create_dir_all(store_path.join("chunks"))?;
+    fs::create_dir_all(store_path.join("manifests"))?;
+    fs::create_dir_all(store_path.join("artifacts"))?;
 
     Ok(())
 }
 
-// Creates a manifest and it's associated chunks from a dir structure
+/// Creates a manifest and it's associated chunks from a dir structure, and saves it into the list of artifacts
 #[cfg(feature = "encoding")]
-pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Result<String, String> {
+pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Result<String> {
+    use std::os::unix::fs::PermissionsExt;
     use walkdir::WalkDir;
 
     // List of all files used by the new manifest
@@ -56,19 +74,18 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
     {
-        use std::os::unix::fs::PermissionsExt;
-
         let root_path = input_dir.to_string_lossy().to_string();
         let path = entry.path().to_string_lossy().to_string();
-        let raw = fs::read(&path).expect("Couldn't read file for chunking!");
+        let raw = fs::read(&path)
+            .map_err(|x| anyhow::anyhow!("Couldn't read {:?} with error {}", &path, x))?;
         let compressed = compression::compress_file(&raw, 3);
         let hash = hash::hash(&raw);
 
         // Determine if the file is executable
-        let is_executable = entry.path().metadata().unwrap().permissions().mode() & 0o111 != 0;
+        let is_executable = entry.path().metadata()?.permissions().mode() & 0o111 != 0;
 
         // Save the chunk
-        fs::write(chunk_dir.join(&hash), compressed).expect("Couldn't write chunk file!");
+        fs::write(chunk_dir.join(&hash), compressed)?;
 
         files.push((path.replacen(&root_path, "", 1), hash, is_executable));
     }
@@ -83,9 +100,8 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
     // Write the manifest to the repo directory
     fs::write(
         manifest_dir.join(&manifest_hash),
-        serde_json::to_string_pretty(&manifest).unwrap(),
-    )
-    .expect("Couldn't write manifest!");
+        serde_json::to_string_pretty(&manifest)?,
+    )?;
 
     artifacts::add_artifact(
         artifact_name.clone(),
@@ -97,8 +113,13 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
 }
 
 #[cfg(feature = "decoding")]
-pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_path: &Path) {
+pub fn install_artifact(
+    artifact_name: &String,
+    store_path: &Path,
+    repo_cache_path: &Path,
+) -> Result<()> {
     use crate::artifacts::get_artifact;
+    use anyhow::anyhow;
     use std::fs::{create_dir_all, rename};
     use std::os::unix::fs::symlink;
 
@@ -115,23 +136,19 @@ pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_pa
     let store_manifest_dir = store_path.join("manifests");
     let store_artifacts_path = store_path.join("artifacts");
 
-    let manifest_hash =
-        get_artifact(artifact_name, &repo_artifacts_path).expect("Artifact not found");
+    let manifest_hash = get_artifact(artifact_name, &repo_artifacts_path)
+        .ok_or_else(|| anyhow!("Tried to get a manifest that didn't exist"))?;
 
-    let manifest: Manifest = serde_json::from_str(
-        fs::read_to_string(repo_manifest_dir.join(&manifest_hash))
-            .unwrap()
-            .as_str(),
-    )
-    .unwrap();
+    let manifest: Manifest =
+        serde_json::from_str(fs::read_to_string(repo_manifest_dir.join(&manifest_hash))?.as_str())?;
 
     for (_path, hash, executable) in &manifest.files {
         // Install chunks
-        install_chunk(&hash, store_path, repo_cache_path).unwrap();
+        install_chunk(&hash, store_path, repo_cache_path)?;
 
         // Make sure it's executable if it needs to be
         if *executable {
-            make_chunk_executable(&hash, store_path);
+            make_chunk_executable(&hash, store_path)?;
         }
     }
 
@@ -143,12 +160,20 @@ pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_pa
             .join(&manifest_hash)
             .join(manifest_defined_path);
 
-        if !path.parent().unwrap().exists() {
-            create_dir_all(&path.parent().unwrap()).unwrap();
+        if !path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?
+            .exists()
+        {
+            create_dir_all(
+                &path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?,
+            )?;
         }
 
-        if !fs::exists(&path).unwrap() {
-            symlink(store_chunk_dir.as_path().join(hash), path).unwrap();
+        if !&path.try_exists()? {
+            symlink(store_chunk_dir.as_path().join(hash), path)?;
         }
     }
 
@@ -158,8 +183,10 @@ pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_pa
     let tmp_symlink = store_artifacts_path.join(&tmp_file_name);
     let final_symlink = store_artifacts_path.join(artifact_name);
 
-    symlink(store_manifest_dir.join(&manifest_hash), &tmp_symlink).unwrap();
-    rename(&tmp_symlink, &final_symlink).unwrap();
+    symlink(store_manifest_dir.join(&manifest_hash), &tmp_symlink)?;
+    rename(&tmp_symlink, &final_symlink)?;
+
+    Ok(())
 }
 
 #[cfg(feature = "decoding")]
@@ -176,25 +203,22 @@ fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
 }
 
 #[cfg(feature = "decoding")]
-fn make_chunk_executable(chunk_hash: &String, store_path: &Path) {
+fn make_chunk_executable(chunk_hash: &String, store_path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
 
     let chunk_path = store_path.join("chunks").join(chunk_hash);
 
     // Read initial permissions first
-    let mut perms = fs::metadata(&chunk_path).unwrap().permissions();
+    let mut perms = fs::metadata(&chunk_path)?.permissions();
 
     // Probably not a good idea to hardcode this.
     perms.set_mode(0o755);
-    fs::set_permissions(&chunk_path, perms).expect("Unable to set executable bit!");
+    fs::set_permissions(&chunk_path, perms)?;
+    Ok(())
 }
 
 #[cfg(feature = "decoding")]
-fn install_chunk(
-    chunk_hash: &String,
-    store_path: &Path,
-    repo_cache_path: &Path,
-) -> Result<(), String> {
+fn install_chunk(chunk_hash: &String, store_path: &Path, repo_cache_path: &Path) -> Result<()> {
     use crate::compression::decompress_file;
 
     let repo_chunk_path = repo_cache_path.join("chunks").join(chunk_hash);
@@ -203,7 +227,7 @@ fn install_chunk(
     // TODO: Network Functionality
 
     if repo_chunk_path.exists() {
-        let mut repo_chunk = fs::read(repo_chunk_path).unwrap();
+        let mut repo_chunk = fs::read(repo_chunk_path)?;
         let decompressed_chunk = decompress_file(&mut repo_chunk);
 
         // Verify hash
@@ -214,10 +238,10 @@ fn install_chunk(
             )
         }
 
-        fs::write(store_chunk_path, decompressed_chunk).unwrap();
+        fs::write(store_chunk_path, decompressed_chunk)?;
 
         Ok(())
     } else {
-        Err("Couldn't find chunk".to_string())
+        bail!("Couldn't find chunk".to_string())
     }
 }
