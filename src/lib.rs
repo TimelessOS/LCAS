@@ -1,12 +1,10 @@
 use std::{
-    env::temp_dir,
     fs::{self, create_dir_all, rename},
-    option,
     os::unix::fs::{PermissionsExt, symlink},
     path::Path,
 };
 
-use crate::{artifacts::get_artifact, compression::decompress_file};
+use crate::artifacts::get_artifact;
 
 mod artifacts;
 mod compression;
@@ -103,6 +101,7 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
     Ok(manifest_hash)
 }
 
+#[cfg(feature = "decoding")]
 pub fn install_artifact(artifact_name: &String, store_path: &Path, repo_cache_path: &Path) {
     assert!(store_path.is_absolute(), "Store path must be absolute!");
     assert!(
@@ -187,11 +186,14 @@ fn make_chunk_executable(chunk_hash: &String, store_path: &Path) {
     fs::set_permissions(&chunk_path, perms).expect("Unable to set executable bit!");
 }
 
+#[cfg(feature = "decoding")]
 fn install_chunk(
     chunk_hash: &String,
     store_path: &Path,
     repo_cache_path: &Path,
 ) -> Result<(), String> {
+    use crate::compression::decompress_file;
+
     let repo_chunk_path = repo_cache_path.join("chunks").join(chunk_hash);
     let store_chunk_path = store_path.join("chunks").join(chunk_hash);
 
