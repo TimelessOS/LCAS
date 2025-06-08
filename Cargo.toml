@@ -7,6 +7,7 @@ repository = "https://github.com/timelessos/lcas"
 documentation = "https://docs.rs/lcas/"
 license = "MIT"
 keywords = [ "file-synchronization", "software-update", "content-addressable", "storage" ]
+catagories = [ "filesystems", "os::linux-apis" ]
 readme = "README.md" 
 edition = "2024"
 
