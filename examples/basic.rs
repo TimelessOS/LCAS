@@ -1,10 +1,10 @@
-use std::io;
-use std::path::absolute;
-use std::{fs, path::Path};
-
-use lcas::{build, create_repo, create_store, install_artifact};
-
+#[cfg(all(feature = "encoding", feature = "decoding"))]
 fn main() -> Result<(), String> {
+    use std::path::absolute;
+    use std::{fs, path::Path};
+
+    use lcas::{build, create_repo, create_store, install_artifact};
+
     // Helper variables
     // `input_dir` is the artifact, likely produced by a build system etc. This is what we want to "transmit".
     let input_dir = absolute(Path::new("./example_dir")).unwrap();
@@ -39,4 +39,11 @@ fn main() -> Result<(), String> {
     install_artifact(&"generic".to_string(), store_dir.as_path(), &repo_dir);
 
     Ok(())
+}
+
+#[cfg(not(all(feature = "encoding", feature = "decoding")))]
+fn main() {
+    use core::panic;
+
+    panic!("You need the encoding and decoding features to run this example");
 }
