@@ -19,14 +19,14 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
-      - name: Run tests (No Features)
+      - name: Run tests (Standard)
         run: cargo test --verbose
 
-      - name: Run tests (Encoding)
-        run: cargo test --verbose --features=encoding
+      - name: Run tests (Encoding Only)
+        run: cargo test --verbose --no-default-features --features=encoding
 
-      - name: Run tests (Decoding)
-        run: cargo test --verbose --features=decoding
+      - name: Run tests (No Features)
+        run: cargo test --verbose --no-default-features
 
       - name: Run tests (All Features)
         run: cargo test --verbose --all-features
