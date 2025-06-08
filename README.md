@@ -1,12 +1,12 @@
 # Linked Content Addressed Storage
 
-CAUTION: This project is a work in progress, and usage is not recommended.
+For projects that use large amounts of duplicate files
 
 ## Contributing
 
 ### TODO
 
-[] - Networking support for repos
-[] - Error handling (Should be propogated upwards)
-[] - Proper tests
-[] - Proper/Better documentation
+- [ ] Networking support for repos
+- [ ] Error handling (Should be propogated upwards)
+- [ ] Proper tests
+- [ ] Proper/Better documentation
