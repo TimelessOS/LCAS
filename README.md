@@ -10,3 +10,4 @@ For projects that use large amounts of duplicate files
 - [ ] Error handling (Should be propogated upwards)
 - [ ] Proper tests
 - [ ] Proper/Better documentation
+- [ ] Cross platform
