@@ -43,7 +43,7 @@ fn main() -> Result<(), String> {
 
 #[cfg(not(all(feature = "encoding", feature = "decoding")))]
 fn main() {
-    use core::panic;
+    use std::panic;
 
     panic!("You need the encoding and decoding features to run this example");
 }
