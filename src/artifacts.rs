@@ -23,8 +23,11 @@ pub fn get_artifact(artifact_name: &String, artifacts_file_path: &Path) -> Optio
 
     artifacts
         .iter()
+        .find(|this_artifact| {
+            dbg!(this_artifact);
+            &this_artifact.0 == artifact_name
+        })
         .map(|artifact| artifact.1.clone())
-        .find(|this_artifact_name| this_artifact_name == artifact_name)
 }
 
 #[cfg(feature = "encoding")]
