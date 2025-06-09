@@ -1,5 +1,9 @@
+#![warn(clippy::pedantic)]
+
+use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
+use std::fs::create_dir_all;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -20,37 +24,71 @@ pub enum RepoType {
     Https,
 }
 
-/// The cache directory is currently only used with networked based RepoType, but may be used a future release.
-pub struct Repo {
+/// Only used for decoding.
+#[cfg(feature = "decoding")]
+pub struct Store {
+    // The "Upstream" RepoType
     pub kind: RepoType,
-    pub path: String,
-    pub cache_path: Option<PathBuf>,
+    /// Path to the Repo, can be a network location depending on `kind`
+    pub repo_path: String,
+    /// The cache directory is currently only used with networked based `RepoType`, but may be used a future release.
+    pub cache_path: PathBuf,
+    /// The directory where all installed artifacts will be under, alongside the CAS System itself.
+    pub path: PathBuf,
 }
 
-/// Creates a repo, or returns an Error if the repo already exists
+/// Attempts to create the repo and it's associated directories.
+///
+/// This operation will create all parent directories if they do not exist.
+/// Any errors encountered during directory creation are ignored.
+///
+/// # Arguments
+///
+/// * `repo_dir` - The base directory for the repo.
+///
+/// # Side Effects
+///
+/// Creates the directory structure on the filesystem if it does not already exist.
+///
+/// # Errors
+///
+/// Any errors returned by `fs::create_dir_all` are ignored.
 #[cfg(feature = "encoding")]
 pub fn create_repo(repo_dir: &Path) -> Result<()> {
-    if repo_dir.exists() {
-        bail!("Repo already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
+    if !repo_dir.exists() {
+        let _ = fs::create_dir_all(repo_dir.join("chunks"));
+        let _ = fs::create_dir_all(repo_dir.join("manifests"));
     }
-
-    let _ = fs::create_dir_all(repo_dir.join("chunks"));
-    let _ = fs::create_dir_all(repo_dir.join("manifests"));
-
     Ok(())
 }
 
-/// Creates a store, or returns an Error if the store already exists
+/// Attempts to create the Store and it's associated directories.
+///
+/// This operation will create all parent directories if they do not exist.
+/// Any errors encountered during directory creation are ignored.
+///
+/// This function should only be used when the Store does not already exist, and is *not* to create the `Store` struct.
+///
+/// # Arguments
+///
+/// * `store` - The correlated Store struct.
+///
+/// # Side Effects
+///
+/// Creates the directory structure on the filesystem if it does not already exist.
+///
+/// # Errors
+///
+/// Any errors returned by `fs::create_dir_all` are ignored.
 #[cfg(feature = "decoding")]
-pub fn create_store(store_path: &Path) -> Result<()> {
-    if store_path.exists() {
+pub fn create_store(store: &Store) -> Result<()> {
+    if store.path.exists() {
         bail!("Store already exists! Make sure the directory doesn't exist, or you're operating on the correct directory.".to_string());
     }
 
-    fs::create_dir_all(store_path)?;
-    fs::create_dir_all(store_path.join("chunks"))?;
-    fs::create_dir_all(store_path.join("manifests"))?;
-    fs::create_dir_all(store_path.join("artifacts"))?;
+    fs::create_dir_all(store.path.join("chunks"))?;
+    fs::create_dir_all(store.path.join("manifests"))?;
+    fs::create_dir_all(store.path.join("artifacts"))?;
 
     Ok(())
 }
@@ -112,43 +150,48 @@ pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Resul
     Ok(manifest_hash)
 }
 
+/// Installs an Artifact by name.
+///
+/// # Arguments
+///
+/// * `artifact_name` - The name of the artifact to install.
+/// * `store` - The correlated Store struct.
+///
+/// # Errors
+/// Returns an error if the artifact does not exist, or if any file operations fail.
 #[cfg(feature = "decoding")]
-pub fn install_artifact(
-    artifact_name: &String,
-    store_path: &Path,
-    repo_cache_path: &Path,
-) -> Result<()> {
+pub fn install_artifact(artifact_name: &String, store: &Store) -> Result<()> {
     use crate::artifacts::get_artifact;
     use anyhow::anyhow;
     use std::fs::{create_dir_all, rename};
     use std::os::unix::fs::symlink;
 
-    assert!(store_path.is_absolute(), "Store path must be absolute!");
-    assert!(
-        repo_cache_path.is_absolute(),
-        "Repo cache path must be absolute!"
-    );
+    let store_chunk_dir = store.path.join("chunks");
+    let store_manifest_dir = store.path.join("manifests");
+    let store_artifacts_path = store.path.join("artifacts");
 
-    let repo_manifest_dir = repo_cache_path.join("manifests");
-    let repo_artifacts_path = repo_cache_path.join("artifacts");
+    let manifest_hash = get_artifact(
+        artifact_name,
+        &resolve_repo_path(store, &"artifacts".to_string())?,
+    )
+    .ok_or_else(|| anyhow!("Tried to get a manifest that didn't exist"))?;
 
-    let store_chunk_dir = store_path.join("chunks");
-    let store_manifest_dir = store_path.join("manifests");
-    let store_artifacts_path = store_path.join("artifacts");
-
-    let manifest_hash = get_artifact(artifact_name, &repo_artifacts_path)
-        .ok_or_else(|| anyhow!("Tried to get a manifest that didn't exist"))?;
-
-    let manifest: Manifest =
-        serde_json::from_str(fs::read_to_string(repo_manifest_dir.join(&manifest_hash))?.as_str())?;
+    let manifest: Manifest = serde_json::from_str(
+        fs::read_to_string(resolve_repo_path(
+            store,
+            &format!("manifests/{manifest_hash}"),
+        )?)?
+        .as_str(),
+    )?;
 
     for (_path, hash, executable) in &manifest.files {
         // Install chunks
-        install_chunk(&hash, store_path, repo_cache_path)?;
+        install_chunk(hash, store)?;
 
         // Make sure it's executable if it needs to be
         if *executable {
-            make_chunk_executable(&hash, store_path)?;
+            // TODO: test this
+            make_chunk_executable(hash, &store.path)?;
         }
     }
 
@@ -166,8 +209,7 @@ pub fn install_artifact(
             .exists()
         {
             create_dir_all(
-                &path
-                    .parent()
+                path.parent()
                     .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?,
             )?;
         }
@@ -190,16 +232,40 @@ pub fn install_artifact(
 }
 
 #[cfg(feature = "decoding")]
+fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
+    if store.cache_path.join(path).exists() {
+        return Ok(store.cache_path.join(path));
+    }
+
+    let joined_path = store.cache_path.join(path);
+    let parent = joined_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?;
+    create_dir_all(parent)?;
+
+    match store.kind {
+        RepoType::Https => bail!("Network support is currently not finished."),
+        RepoType::Local => fs::copy(
+            PathBuf::from(&store.repo_path).join(path),
+            store.cache_path.join(path),
+        ),
+    }
+    .with_context(|| format!("Couldn't get {path} from {}", &store.repo_path))?;
+
+    Ok(store.cache_path.join(path))
+}
+
+#[cfg(feature = "decoding")]
 fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
     let potential = potential.unwrap_or_default();
 
-    let file_name = format!(".tmp_{}", &potential);
+    let file_name = format!(".tmp_{potential}");
 
-    return if dir.join(&file_name).exists() {
+    if dir.join(&file_name).exists() {
         get_temp_file(Some(potential + 1), dir)
     } else {
         file_name
-    };
+    }
 }
 
 #[cfg(feature = "decoding")]
@@ -211,37 +277,125 @@ fn make_chunk_executable(chunk_hash: &String, store_path: &Path) -> Result<()> {
     // Read initial permissions first
     let mut perms = fs::metadata(&chunk_path)?.permissions();
 
-    // Probably not a good idea to hardcode this.
+    // Probably not a good idea to hardcode this, but it's a sensible default.
     perms.set_mode(0o755);
     fs::set_permissions(&chunk_path, perms)?;
     Ok(())
 }
 
 #[cfg(feature = "decoding")]
-fn install_chunk(chunk_hash: &String, store_path: &Path, repo_cache_path: &Path) -> Result<()> {
+fn install_chunk(chunk_hash: &String, store: &Store) -> Result<()> {
     use crate::compression::decompress_file;
 
-    let repo_chunk_path = repo_cache_path.join("chunks").join(chunk_hash);
-    let store_chunk_path = store_path.join("chunks").join(chunk_hash);
+    let repo_chunk_path = resolve_repo_path(store, &format!("chunks/{chunk_hash}"))
+        .with_context(|| format!("Couldn't find chunk {chunk_hash}"))?;
+    let store_chunk_path = store.path.join("chunks").join(chunk_hash);
 
-    // TODO: Network Functionality
+    let mut repo_chunk = fs::read(repo_chunk_path)?;
+    let decompressed_chunk = decompress_file(&mut repo_chunk);
 
-    if repo_chunk_path.exists() {
-        let mut repo_chunk = fs::read(repo_chunk_path)?;
-        let decompressed_chunk = decompress_file(&mut repo_chunk);
+    // Verify hash
+    let hash = hash::hash(&decompressed_chunk);
+    if &hash != chunk_hash {
+        bail!("Unable to verify hash")
+    }
 
-        // Verify hash
-        let hash = hash::hash(&decompressed_chunk);
-        if &hash != chunk_hash {
-            panic!(
-                "Unable to verify hash: Something has either been corrupted, or something malicous is happening!"
-            )
-        }
+    fs::write(store_chunk_path, decompressed_chunk)?;
 
-        fs::write(store_chunk_path, decompressed_chunk)?;
+    Ok(())
+}
 
-        Ok(())
-    } else {
-        bail!("Couldn't find chunk".to_string())
+#[cfg(test)]
+mod tests {
+    use std::{env::temp_dir, fs::remove_dir_all};
+
+    use std::fs;
+    use std::fs::File;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[cfg(feature = "encoding")]
+    use crate::create_repo;
+
+    #[cfg(feature = "decoding")]
+    use crate::{RepoType, Store, create_store, resolve_repo_path};
+
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn create_test_store() -> Store {
+        let repo = temp_dir().join("lcas_testing_repo");
+        let cache = temp_dir().join("lcas_testing_cache");
+        let store_path = temp_dir().join("lcas_testing_store");
+
+        let _ = remove_dir_all(&repo);
+        let _ = remove_dir_all(&cache);
+        let _ = remove_dir_all(&store_path);
+
+        let store = Store {
+            cache_path: cache,
+            kind: RepoType::Local,
+            path: store_path,
+            repo_path: repo.to_string_lossy().to_string(),
+        };
+        create_repo(&repo).unwrap();
+        create_store(&store).unwrap();
+
+        store
+    }
+
+    #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn store_to_cache_empty() {
+        let store = create_test_store();
+
+        assert!(resolve_repo_path(&store, &"manifests/undefined".to_string()).is_err());
+    }
+
+    #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn create_store_when_exists_should_fail() {
+        let store = create_test_store();
+        // Try to create the store again, should error
+        let result = create_store(&store);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "encoding")]
+    fn create_repo_creates_directories() {
+        let repo = temp_dir().join("lcas_testing_repo_dirs");
+        let _ = remove_dir_all(&repo);
+
+        create_repo(&repo).unwrap();
+
+        assert!(repo.join("chunks").exists());
+        assert!(repo.join("manifests").exists());
+    }
+
+    #[test]
+    #[cfg(feature = "decoding")]
+    fn get_temp_file_returns_unique_names() {
+        let dir = temp_dir().join("lcas_temp_file_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let file1 = super::get_temp_file(None, &dir);
+        std::fs::File::create(dir.join(&file1)).unwrap();
+        let file2 = super::get_temp_file(None, &dir);
+        assert_ne!(file1, file2);
+        let _ = remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(feature = "decoding")]
+    fn make_chunk_executable_sets_permissions() {
+        let dir = temp_dir().join("lcas_executable_test");
+        let _ = fs::create_dir_all(dir.join("chunks"));
+        let chunk_hash = "testchunk".to_string();
+        let chunk_path = dir.join("chunks").join(&chunk_hash);
+        File::create(&chunk_path).unwrap();
+
+        super::make_chunk_executable(&chunk_hash, &dir).unwrap();
+
+        let perms = fs::metadata(&chunk_path).unwrap().permissions();
+        assert_eq!(perms.mode() & 0o111, 0o111);
+
+        let _ = remove_dir_all(&dir);
     }
 }

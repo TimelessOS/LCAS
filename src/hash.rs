@@ -1,9 +1,11 @@
+#![warn(clippy::pedantic)]
+
 use xxhash_rust::xxh3::xxh3_64;
 
 // Hashes with xxh3
 #[cfg(any(feature = "decoding", feature = "encoding"))]
-pub fn hash(input: &Vec<u8>) -> String {
-    xxh3_64(&input).to_string()
+pub fn hash(input: &[u8]) -> String {
+    xxh3_64(input).to_string()
 }
 
 // Converts the manifest to a string, and then hashes it

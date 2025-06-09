@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use std::{fs, path::Path};
 
 fn read_artifacts_file(artifacts_file_path: &Path) -> Vec<(String, String)> {

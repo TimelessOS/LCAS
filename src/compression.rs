@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 // Compresses with ZSTD
 #[cfg(feature = "encoding")]
 pub fn compress_file(input: &Vec<u8>, level: i32) -> Vec<u8> {
