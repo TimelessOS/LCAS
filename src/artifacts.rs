@@ -35,7 +35,7 @@ pub fn get_artifact(artifact_name: &String, artifacts_file_path: &Path) -> Optio
 
 #[cfg(feature = "encoding")]
 pub fn add_artifact(artifact_name: String, manifest_hash: String, artifacts_file_path: &Path) {
-    let mut artifacts: Vec<(String, String)> = read_artifacts_file(&artifacts_file_path)
+    let mut artifacts: Vec<(String, String)> = read_artifacts_file(artifacts_file_path)
         .iter()
         .filter(|artifact| artifact.0 != artifact_name)
         .map(|artifact| (artifact.0.clone(), artifact.1.clone()))
@@ -49,10 +49,12 @@ pub fn add_artifact(artifact_name: String, manifest_hash: String, artifacts_file
 
 #[cfg(feature = "encoding")]
 fn serialize_artifacts(artifacts: Vec<(String, String)>) -> String {
+    use std::fmt::Write;
+
     let mut string = String::new();
 
     for artifact in artifacts {
-        string += &format!("{}:{}\n", artifact.0, artifact.1);
+        writeln!(&mut string, "{}:{}", artifact.0, artifact.1).unwrap();
     }
 
     string
@@ -150,6 +152,6 @@ mod tests {
         assert_eq!(
             serialize_artifacts(artifacts),
             "test1:1\ntest2:2\ntest3:3\n"
-        )
+        );
     }
 }

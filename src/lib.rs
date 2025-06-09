@@ -55,14 +55,14 @@ pub struct Store {
 /// Any errors returned by `fs::create_dir_all` are ignored.
 #[cfg(feature = "encoding")]
 pub fn create_repo(repo_dir: &Path) -> Result<()> {
-    return if !repo_dir.exists() {
-        let _ = fs::create_dir_all(repo_dir.join("chunks"))?;
-        let _ = fs::create_dir_all(repo_dir.join("manifests"))?;
-
-        Ok(())
-    } else {
+    if repo_dir.exists() {
         bail!("Already exists! {}", repo_dir.display())
-    };
+    }
+
+    () = fs::create_dir_all(repo_dir.join("chunks"))?;
+    () = fs::create_dir_all(repo_dir.join("manifests"))?;
+
+    Ok(())
 }
 
 /// Attempts to create the Store and it's associated directories.
@@ -96,9 +96,29 @@ pub fn create_store(store: &Store) -> Result<()> {
     Ok(())
 }
 
-/// Creates a manifest and it's associated chunks from a dir structure, and saves it into the list of artifacts
+/// Creates a manifest and its associated chunks from a directory structure, and saves it into the list of artifacts.
+///
+/// This function walks the given input directory, compresses and hashes each file, and stores the resulting chunks and manifest in the repository.
+/// The manifest is then registered as an artifact under the specified name.
+///
+/// # Arguments
+///
+/// * `input_dir` - The directory containing files to be added to the artifact.
+/// * `repo_dir` - The base directory of the repository where chunks and manifests will be stored.
+/// * `artifact_name` - The name under which the artifact will be registered.
+///
+/// # Returns
+///
+/// Returns the hash of the created manifest as a `String`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Any file in the input directory cannot be read.
+/// - Any chunk or manifest cannot be written to the repository.
+/// - Any other I/O or processing error occurs during the build process.
 #[cfg(feature = "encoding")]
-pub fn build(input_dir: &PathBuf, repo_dir: &PathBuf, artifact_name: &String) -> Result<String> {
+pub fn build(input_dir: &PathBuf, repo_dir: &Path, artifact_name: &str) -> Result<String> {
     use std::os::unix::fs::PermissionsExt;
     use walkdir::WalkDir;
 
@@ -131,10 +151,7 @@ pub fn build(input_dir: &PathBuf, repo_dir: &PathBuf, artifact_name: &String) ->
         files.push((path.replacen(&root_path, "", 1), hash, is_executable));
     }
 
-    let manifest = Manifest {
-        format: 1,
-        files: files,
-    };
+    let manifest = Manifest { format: 1, files };
 
     let manifest_hash = hash::hash_manifest(&manifest.files);
 
@@ -145,8 +162,8 @@ pub fn build(input_dir: &PathBuf, repo_dir: &PathBuf, artifact_name: &String) ->
     )?;
 
     artifacts::add_artifact(
-        artifact_name.clone(),
-        manifest_hash.clone(),
+        artifact_name.to_string(),
+        manifest_hash.to_string(),
         &artifacts_file_path,
     );
 
@@ -353,9 +370,9 @@ mod tests {
 
     #[cfg(all(feature = "encoding", feature = "decoding"))]
     fn create_test_store(test_name: &str) -> Store {
-        let repo = temp_dir().join(format!("lcas_testing_repo_{}", test_name));
-        let cache = temp_dir().join(format!("lcas_testing_cache_{}", test_name));
-        let store_path = temp_dir().join(format!("lcas_testing_store_{}", test_name));
+        let repo = temp_dir().join(format!("lcas_testing_repo_{test_name}"));
+        let cache = temp_dir().join(format!("lcas_testing_cache_{test_name}"));
+        let store_path = temp_dir().join(format!("lcas_testing_store_{test_name}"));
 
         let _ = remove_dir_all(&repo);
         let _ = remove_dir_all(&cache);
@@ -498,7 +515,7 @@ mod tests {
         build(
             &input_dir,
             &PathBuf::from(&store.repo_path),
-            &"test_artifact".to_string(),
+            "test_artifact",
         )
         .unwrap();
 

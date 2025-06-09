@@ -12,7 +12,7 @@ pub fn hash(input: &[u8]) -> String {
 #[cfg(feature = "encoding")]
 pub fn hash_manifest(input: &Vec<(String, String, bool)>) -> String {
     // Not a true hash. Just a temporary place to dump data, which can then be hashed
-    let mut current_hash = "".to_string();
+    let mut current_hash = String::new();
 
     for (file, hash, executable) in input {
         current_hash += file;
@@ -31,14 +31,14 @@ mod tests {
     #[test]
     #[cfg(any(feature = "decoding", feature = "encoding"))]
     fn hash_stable() {
-        let result = hash(&vec![1, 2, 3]);
+        let result = hash(&[1, 2, 3]);
         assert_eq!(result, "16991689376074199867");
     }
 
     #[test]
     #[cfg(any(feature = "decoding", feature = "encoding"))]
     fn hash_empty_vec() {
-        let result = hash(&vec![]);
+        let result = hash(&[]);
         assert_eq!(result, "3244421341483603138");
     }
 

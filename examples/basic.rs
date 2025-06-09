@@ -1,6 +1,7 @@
 #![warn(clippy::pedantic)]
 
 use anyhow::Result;
+
 #[cfg(all(feature = "encoding", feature = "decoding"))]
 fn main() -> Result<()> {
     use std::path::absolute;
@@ -20,7 +21,7 @@ fn main() -> Result<()> {
 
     let store = Store {
         kind: RepoType::Local,
-        cache_path: cache_path,
+        cache_path,
         repo_path: repo_dir.to_string_lossy().to_string(),
         path: store_dir,
     };
@@ -40,11 +41,7 @@ fn main() -> Result<()> {
     .unwrap();
 
     // Compile the artifact into a manifest and chunks and store it
-    build(
-        &input_dir.to_path_buf(),
-        &repo_dir.to_path_buf(),
-        &"generic".to_string(),
-    )?;
+    build(&input_dir, &repo_dir, "generic")?;
 
     // Install the resulting manifest into an artifact in the `store_dir`
     install_artifact(&"generic".to_string(), &store)?;
@@ -59,22 +56,22 @@ fn main() -> Result<()> {
     bail!("You need the encoding and decoding features to run this example");
 }
 
-#[test]
-#[cfg(all(feature = "encoding", feature = "decoding"))]
-fn test_example() -> Result<()> {
-    use std::{fs::remove_dir_all, path::Path};
+mod tests {
+    #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn test_example() {
+        use std::{fs::remove_dir_all, path::Path};
 
-    let _ = remove_dir_all(Path::new("./example_dir"));
-    let _ = remove_dir_all(Path::new("./example_store"));
-    let _ = remove_dir_all(Path::new("./example_repo"));
-    let _ = remove_dir_all(Path::new("./example_cache"));
+        let _ = remove_dir_all(Path::new("./example_dir"));
+        let _ = remove_dir_all(Path::new("./example_store"));
+        let _ = remove_dir_all(Path::new("./example_repo"));
+        let _ = remove_dir_all(Path::new("./example_cache"));
 
-    let val = main();
+        super::main().unwrap();
 
-    let _ = remove_dir_all(Path::new("./example_dir"));
-    let _ = remove_dir_all(Path::new("./example_store"));
-    let _ = remove_dir_all(Path::new("./example_repo"));
-    let _ = remove_dir_all(Path::new("./example_cache"));
-
-    val
+        let _ = remove_dir_all(Path::new("./example_dir"));
+        let _ = remove_dir_all(Path::new("./example_store"));
+        let _ = remove_dir_all(Path::new("./example_repo"));
+        let _ = remove_dir_all(Path::new("./example_cache"));
+    }
 }
