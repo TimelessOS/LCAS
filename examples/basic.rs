@@ -41,8 +41,8 @@ fn main() -> Result<()> {
 
     // Compile the artifact into a manifest and chunks and store it
     build(
-        input_dir.as_path(),
-        repo_dir.as_path(),
+        &input_dir.to_path_buf(),
+        &repo_dir.to_path_buf(),
         &"generic".to_string(),
     )?;
 

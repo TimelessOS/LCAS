@@ -55,11 +55,14 @@ pub struct Store {
 /// Any errors returned by `fs::create_dir_all` are ignored.
 #[cfg(feature = "encoding")]
 pub fn create_repo(repo_dir: &Path) -> Result<()> {
-    if !repo_dir.exists() {
-        let _ = fs::create_dir_all(repo_dir.join("chunks"));
-        let _ = fs::create_dir_all(repo_dir.join("manifests"));
-    }
-    Ok(())
+    return if !repo_dir.exists() {
+        let _ = fs::create_dir_all(repo_dir.join("chunks"))?;
+        let _ = fs::create_dir_all(repo_dir.join("manifests"))?;
+
+        Ok(())
+    } else {
+        bail!("Already exists! {}", repo_dir.display())
+    };
 }
 
 /// Attempts to create the Store and it's associated directories.
@@ -95,7 +98,7 @@ pub fn create_store(store: &Store) -> Result<()> {
 
 /// Creates a manifest and it's associated chunks from a dir structure, and saves it into the list of artifacts
 #[cfg(feature = "encoding")]
-pub fn build(input_dir: &Path, repo_dir: &Path, artifact_name: &String) -> Result<String> {
+pub fn build(input_dir: &PathBuf, repo_dir: &PathBuf, artifact_name: &String) -> Result<String> {
     use std::os::unix::fs::PermissionsExt;
     use walkdir::WalkDir;
 
@@ -256,15 +259,38 @@ fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
 }
 
 #[cfg(feature = "decoding")]
-fn get_temp_file(potential: Option<u8>, dir: &Path) -> String {
+fn get_temp_file(potential: Option<u8>, dir: &Path) -> PathBuf {
     let potential = potential.unwrap_or_default();
 
     let file_name = format!(".tmp_{potential}");
 
+    // Overflow protection, if the potential number is too high, we clear the oldest old temp file and replace it.
+    if potential > u8::MAX - 1 {
+        // Find the most recently modified temp file and remove it to prevent overflow
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let oldest_temp = entries
+                .flatten()
+                .filter(|f| {
+                    f.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+                        && f.file_name().to_string_lossy().starts_with(".tmp_")
+                })
+                .min_by_key(|f| f.metadata().and_then(|m| m.modified()).ok())
+                .map(|f| f.path())
+                .unwrap();
+
+            fs::remove_file(&oldest_temp).unwrap_or_else(|x| {
+                panic!("Failed to remove old temp symlink: {x}");
+            });
+
+            return oldest_temp;
+        }
+    }
+
+    // Check if the file already exists, if it does, increment the potential number
     if dir.join(&file_name).exists() {
         get_temp_file(Some(potential + 1), dir)
     } else {
-        file_name
+        dir.join(&file_name)
     }
 }
 
@@ -319,11 +345,17 @@ mod tests {
     #[cfg(feature = "decoding")]
     use crate::{RepoType, Store, create_store, resolve_repo_path};
 
+    #[test]
     #[cfg(all(feature = "encoding", feature = "decoding"))]
-    fn create_test_store() -> Store {
-        let repo = temp_dir().join("lcas_testing_repo");
-        let cache = temp_dir().join("lcas_testing_cache");
-        let store_path = temp_dir().join("lcas_testing_store");
+    fn test_create_store() {
+        let _ = create_test_store("basic");
+    }
+
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn create_test_store(test_name: &str) -> Store {
+        let repo = temp_dir().join(format!("lcas_testing_repo_{}", test_name));
+        let cache = temp_dir().join(format!("lcas_testing_cache_{}", test_name));
+        let store_path = temp_dir().join(format!("lcas_testing_store_{}", test_name));
 
         let _ = remove_dir_all(&repo);
         let _ = remove_dir_all(&cache);
@@ -343,16 +375,16 @@ mod tests {
 
     #[test]
     #[cfg(all(feature = "encoding", feature = "decoding"))]
-    fn store_to_cache_empty() {
-        let store = create_test_store();
+    fn test_store_to_cache_empty() {
+        let store = create_test_store("store_to_cache_empty");
 
         assert!(resolve_repo_path(&store, &"manifests/undefined".to_string()).is_err());
     }
 
     #[test]
     #[cfg(all(feature = "encoding", feature = "decoding"))]
-    fn create_store_when_exists_should_fail() {
-        let store = create_test_store();
+    fn test_create_store_when_exists_should_fail() {
+        let store = create_test_store("create_store_when_exists_should_fail");
         // Try to create the store again, should error
         let result = create_store(&store);
         assert!(result.is_err());
@@ -360,7 +392,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "encoding")]
-    fn create_repo_creates_directories() {
+    fn test_create_repo_creates_directories() {
         let repo = temp_dir().join("lcas_testing_repo_dirs");
         let _ = remove_dir_all(&repo);
 
@@ -371,9 +403,47 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "encoding")]
+    fn test_create_repo_on_file() {
+        let repo = temp_dir().join("lcas_testing_repo_file");
+        let _ = remove_dir_all(&repo);
+
+        fs::write(&repo, "Testing data.").unwrap();
+
+        let err = create_repo(&repo).unwrap_err();
+        assert!(err.to_string().contains("Already exists!"));
+    }
+
+    #[test]
+    #[cfg(feature = "encoding")]
+    fn test_create_repo_on_dir() {
+        let repo = temp_dir().join("lcas_testing_repo_dir");
+        let _ = remove_dir_all(&repo);
+
+        fs::create_dir(&repo).unwrap();
+
+        let err = create_repo(&repo).unwrap_err();
+        assert!(err.to_string().contains("Already exists!"));
+    }
+
+    #[test]
     #[cfg(feature = "decoding")]
-    fn get_temp_file_returns_unique_names() {
-        let dir = temp_dir().join("lcas_temp_file_test");
+    fn test_create_temp_file_overflow_test() {
+        let dir = temp_dir().join("lcas_temp_file_overflow_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        for _i in 0..1000 {
+            let file_name = super::get_temp_file(None, &dir);
+            File::create_new(&file_name).unwrap();
+            assert!(file_name.exists());
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "decoding")]
+    fn test_get_temp_file_returns_unique_names() {
+        let dir = temp_dir().join("lcas_temp_file_unique_test");
         let _ = std::fs::create_dir_all(&dir);
         let file1 = super::get_temp_file(None, &dir);
         std::fs::File::create(dir.join(&file1)).unwrap();
@@ -384,7 +454,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "decoding")]
-    fn make_chunk_executable_sets_permissions() {
+    fn test_make_chunk_executable_sets_permissions() {
         let dir = temp_dir().join("lcas_executable_test");
         let _ = fs::create_dir_all(dir.join("chunks"));
         let chunk_hash = "testchunk".to_string();
@@ -397,5 +467,41 @@ mod tests {
         assert_eq!(perms.mode() & 0o111, 0o111);
 
         let _ = remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn test_create_and_load_artifact() {
+        use std::path::PathBuf;
+
+        use crate::{build, install_artifact};
+
+        let store = create_test_store("artifact");
+        let input_dir = temp_dir().join("lcas_artifact_test");
+
+        let _ = fs::remove_dir_all(&input_dir);
+        fs::create_dir_all(&input_dir).unwrap();
+        fs::write(input_dir.join("file1.txt"), b"Hello, world!").unwrap();
+        fs::write(input_dir.join("file2.txt"), b"Another file.").unwrap();
+
+        // Create a nested directory and files inside it
+        let nested_dir = input_dir.join("nested");
+        fs::create_dir(&nested_dir).unwrap();
+        fs::write(nested_dir.join("nested1.txt"), b"Nested file 1.").unwrap();
+        fs::write(nested_dir.join("nested2.txt"), b"Nested file 2.").unwrap();
+
+        // Create a deeper nested directory
+        let deeper_nested_dir = nested_dir.join("deeper");
+        fs::create_dir(&deeper_nested_dir).unwrap();
+        fs::write(deeper_nested_dir.join("deepfile.txt"), b"Deep nested file.").unwrap();
+
+        build(
+            &input_dir,
+            &PathBuf::from(&store.repo_path),
+            &"test_artifact".to_string(),
+        )
+        .unwrap();
+
+        install_artifact(&"test_artifact".to_string(), &store).unwrap();
     }
 }
