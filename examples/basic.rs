@@ -62,6 +62,8 @@ fn main() -> Result<()> {
 #[test]
 #[cfg(all(feature = "encoding", feature = "decoding"))]
 fn test_example() -> Result<()> {
+    use std::{fs::remove_dir_all, path::Path};
+
     let _ = remove_dir_all(Path::new("./example_dir"));
     let _ = remove_dir_all(Path::new("./example_store"));
     let _ = remove_dir_all(Path::new("./example_repo"));
