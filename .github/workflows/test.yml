@@ -27,6 +27,9 @@ jobs:
       - name: Run tests (Encoding Only)
         run: cargo test --verbose --all-targets --no-default-features --features=encoding
 
+      - name: Run tests (HTTPs)
+        run: cargo test --verbose --all-targets --features=https
+
       - name: Run tests (No Features)
         run: cargo test --verbose --all-targets --no-default-features
 

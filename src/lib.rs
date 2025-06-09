@@ -12,6 +12,7 @@ use std::{
 mod artifacts;
 mod compression;
 mod hash;
+mod network;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Manifest {
@@ -264,11 +265,15 @@ fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
     create_dir_all(parent)?;
 
     match store.kind {
-        RepoType::Https => bail!("Network support is currently not finished."),
+        RepoType::Https => {
+            network::download_file(&store.repo_path, &store.cache_path.join(path)).map(|_| ())
+        }
         RepoType::Local => fs::copy(
             PathBuf::from(&store.repo_path).join(path),
             store.cache_path.join(path),
-        ),
+        )
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!(e)),
     }
     .with_context(|| format!("Couldn't get {path} from {}", &store.repo_path))?;
 
