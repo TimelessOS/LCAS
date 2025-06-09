@@ -10,21 +10,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  lint:
+  coverage:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        env:
+          fetch-depth: 0
 
-      - name: Clippy
-        run: |
-          rustup component add clippy
-          cargo clippy --all-targets --all-features
-
-      - name: Coverage
+      - name: Push to coveralls.io
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
         run: |
           cargo install cargo-tarpaulin
-          cargo tarpaulin --all-targets --all-features --out stdout --engine llvm
+          cargo tarpaulin --all-targets --all-features --ciserver github-ci --coveralls $COVERALLS_REPO_TOKEN --engine llvm
 
   test:
     runs-on: ubuntu-latest
@@ -46,3 +45,8 @@ jobs:
 
       - name: Run tests (All Features)
         run: cargo test --verbose --all-targets --all-features
+
+      - name: Clippy (All Features)
+        run: |
+          rustup component add clippy
+          cargo clippy --all-targets --all-features

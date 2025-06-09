@@ -1,5 +1,7 @@
 # Linked Content Addressed Storage
 
+[![Coverage Status](https://coveralls.io/repos/github/TimelessOS/LCAS/badge.svg?branch=main)](https://coveralls.io/github/TimelessOS/LCAS?branch=main)
+
 A simple yet complex method of storing large directory structures with duplicate files
 
 ## Examples
