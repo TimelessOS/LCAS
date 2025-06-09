@@ -10,26 +10,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  coverage:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-        env:
-          fetch-depth: 0
-
-      - name: Push to coveralls.io
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        run: |
-          cargo install cargo-tarpaulin
-          cargo tarpaulin --all-targets --all-features --ciserver github-ci --coveralls $COVERALLS_REPO_TOKEN --engine llvm
-
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Build
         run: cargo build --verbose --all-targets
@@ -47,6 +34,18 @@ jobs:
         run: cargo test --verbose --all-targets --all-features
 
       - name: Clippy (All Features)
-        run: |
-          rustup component add clippy
-          cargo clippy --all-targets --all-features
+        run: cargo clippy --all-targets --all-features
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-targets --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: true
+          slug: TimelessOS/LCAS
