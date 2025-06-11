@@ -31,7 +31,7 @@ pub struct Store {
     // The "Upstream" RepoType
     pub kind: RepoType,
     /// Path to the Repo, can be a network location depending on `kind`
-    pub repo_path: String,
+    pub repos: Vec<String>,
     /// The cache directory is currently only used with networked based `RepoType`, but may be used a future release.
     pub cache_path: PathBuf,
     /// The directory where all installed artifacts will be under, alongside the CAS System itself.
@@ -264,18 +264,19 @@ fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
         .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?;
     create_dir_all(parent)?;
 
-    match store.kind {
-        RepoType::Https => {
-            network::download_file(&store.repo_path, &store.cache_path.join(path)).map(|_| ())
+    for repo in &store.repos {
+        match store.kind {
+            RepoType::Https => {
+                network::download_file(repo, &store.cache_path.join(path)).map(|_| ())
+            }
+            RepoType::Local => {
+                fs::copy(PathBuf::from(&repo).join(path), store.cache_path.join(path))
+                    .map(|_| ())
+                    .map_err(|e| anyhow::anyhow!(e))
+            }
         }
-        RepoType::Local => fs::copy(
-            PathBuf::from(&store.repo_path).join(path),
-            store.cache_path.join(path),
-        )
-        .map(|_| ())
-        .map_err(|e| anyhow::anyhow!(e)),
+        .with_context(|| format!("Couldn't get {path} from {repo}"))?;
     }
-    .with_context(|| format!("Couldn't get {path} from {}", &store.repo_path))?;
 
     Ok(store.cache_path.join(path))
 }
@@ -387,7 +388,7 @@ mod tests {
             cache_path: cache,
             kind: RepoType::Local,
             path: store_path,
-            repo_path: repo.to_string_lossy().to_string(),
+            repos: vec![repo.to_string_lossy().to_string()],
         };
         create_repo(&repo).unwrap();
         create_store(&store).unwrap();
@@ -519,7 +520,7 @@ mod tests {
 
         build(
             &input_dir,
-            &PathBuf::from(&store.repo_path),
+            &PathBuf::from(&store.repos.first().unwrap()),
             "test_artifact",
         )
         .unwrap();

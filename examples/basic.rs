@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     let store = Store {
         kind: RepoType::Local,
         cache_path,
-        repo_path: repo_dir.to_string_lossy().to_string(),
+        repos: vec![repo_dir.to_string_lossy().to_string()],
         path: store_dir,
     };
 
