@@ -254,6 +254,8 @@ pub fn install_artifact(artifact_name: &String, store: &Store) -> Result<()> {
 
 #[cfg(feature = "decoding")]
 fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
+    use core::error;
+
     if store.cache_path.join(path).exists() {
         return Ok(store.cache_path.join(path));
     }
@@ -264,8 +266,11 @@ fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
         .ok_or_else(|| anyhow::anyhow!("Failed to get parent directory"))?;
     create_dir_all(parent)?;
 
+    // List of all errors accumulated in the next for loop.
+    let mut error_list = vec![];
+
     for repo in &store.repos {
-        match store.kind {
+        let result = match store.kind {
             RepoType::Https => {
                 network::download_file(repo, &store.cache_path.join(path)).map(|_| ())
             }
@@ -274,11 +279,17 @@ fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
                     .map(|_| ())
                     .map_err(|e| anyhow::anyhow!(e))
             }
+        };
+
+        if result.is_ok() {
+            return Ok(store.cache_path.join(path));
         }
-        .with_context(|| format!("Couldn't get {path} from {repo}"))?;
+
+        // If error, just add to `error_list`` and continue to next repo, do not return error
+        error_list.push(result.unwrap_err());
     }
 
-    Ok(store.cache_path.join(path))
+    Err(anyhow::anyhow!("{:?}", error_list))
 }
 
 #[cfg(feature = "decoding")]
@@ -526,5 +537,55 @@ mod tests {
         .unwrap();
 
         install_artifact(&"test_artifact".to_string(), &store).unwrap();
+    }
+
+    #[test]
+    #[cfg(all(feature = "encoding", feature = "decoding"))]
+    fn test_create_and_load_artifact_multirepo() {
+        use std::path::PathBuf;
+
+        use crate::{build, install_artifact};
+
+        let store_a = create_test_store("multirepo_a");
+        let store_b = create_test_store("multirepo_b");
+
+        let store = Store {
+            kind: store_a.kind,
+            repos: vec![
+                store_a.repos.first().unwrap().clone(),
+                store_b.repos.first().unwrap().clone(),
+            ],
+            cache_path: store_a.cache_path,
+            path: store_a.path,
+        };
+
+        let input_dir = temp_dir().join("lcas_artifact_test_multirepo");
+
+        // First artifact
+        let _ = fs::remove_dir_all(&input_dir);
+        fs::create_dir_all(&input_dir).unwrap();
+        fs::write(input_dir.join("file1.txt"), b"Hello, world!").unwrap();
+
+        build(
+            &input_dir,
+            &PathBuf::from(&store.repos.first().unwrap()),
+            "test_artifact_a",
+        )
+        .unwrap();
+
+        // Second artifact
+        let _ = fs::remove_dir_all(&input_dir);
+        fs::create_dir_all(&input_dir).unwrap();
+        fs::write(input_dir.join("file1.txt"), b"Hello, world!").unwrap();
+
+        build(
+            &input_dir,
+            &PathBuf::from(&store.repos.first().unwrap()),
+            "test_artifact_b",
+        )
+        .unwrap();
+
+        install_artifact(&"test_artifact_a".to_string(), &store).unwrap();
+        install_artifact(&"test_artifact_b".to_string(), &store).unwrap();
     }
 }
