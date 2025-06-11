@@ -1,6 +1,67 @@
 
 
+## v0.1.2 (2025-06-11)
+
+### New Features
+
+ - <csr-id-89631fec97a77690186ff1f5fb55c985a04266c5/> multirepo support
+ - <csr-id-4fff1b29db02fadd7680536efb41a1bf045dd397/> preliminary multi-repo support
+
+### Other
+
+ - <csr-id-46a54628fdcfaff18424c240e70fbcb4b10af094/> split coverage and generic testing
+ - <csr-id-31f5e85e13cee49a943acad668089e2d46db3514/> update codecov to v5
+
+### Style
+
+ - <csr-id-42f18a73ca9a9d20349a2c3956ba56103632b98a/> fix minor linting issue
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 5 commits contributed to the release.
+ - 1 day passed between releases.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Fix minor linting issue ([`42f18a7`](https://github.com/TimelessOS/LCAS/commit/42f18a73ca9a9d20349a2c3956ba56103632b98a))
+    - Split coverage and generic testing ([`46a5462`](https://github.com/TimelessOS/LCAS/commit/46a54628fdcfaff18424c240e70fbcb4b10af094))
+    - Multirepo support ([`89631fe`](https://github.com/TimelessOS/LCAS/commit/89631fec97a77690186ff1f5fb55c985a04266c5))
+    - Preliminary multi-repo support ([`4fff1b2`](https://github.com/TimelessOS/LCAS/commit/4fff1b29db02fadd7680536efb41a1bf045dd397))
+    - Update codecov to v5 ([`31f5e85`](https://github.com/TimelessOS/LCAS/commit/31f5e85e13cee49a943acad668089e2d46db3514))
+</details>
+
 ## v0.1.1 (2025-06-10)
+
+<csr-id-295ee2a17d103cddd05fecb9d9b7eff19070b2a2/>
+<csr-id-c8fb0fb5d2e82ca92c74570fbb520ab9d5f1fc4e/>
+<csr-id-eff17958f165cbe319d36b856102a719e0da5a5c/>
+<csr-id-08edfc345ba85830ffcfb1e86c9c323b561070ba/>
+<csr-id-04169d76fc0154ff2952099b2efe5dccc9b48d41/>
+<csr-id-14f6bf7393f95bf0863cfe1039e1dc4c57abef3a/>
+<csr-id-c4ea17be3f26baf4d0567b5073e6dd8a8dad0ff7/>
+<csr-id-32b86b478d30c1046461aadc95a425e3264239eb/>
+<csr-id-7a2b5abe4d09ff435d304a9bbf897acc7bc7553c/>
+<csr-id-a2488ae0622019d2ed6c3f6e35c78a7a0abd5e3d/>
+<csr-id-7b17bcbf96943e8b733ac995d215c2621da10739/>
+<csr-id-16b4e34c8da87051abf37a0b9a9d1624a8275967/>
+<csr-id-bcb244aa4a7efe723fa4b6111205c197d208de55/>
+<csr-id-3525358f3f51ab651affa0eb610201dedacc95e1/>
+<csr-id-1356c6834c156a33f079ff4f9d628240066201d0/>
+<csr-id-9d272a6aa2d1a9fba2817306df0d2fb7603c24a2/>
+<csr-id-bd1002a14a9857f7b65a26f7339b98facd3dfa10/>
+<csr-id-a364eac8163ede0f22ce6f7644678194d392ed56/>
+<csr-id-805396a9316481049f67532eec45596a4f0ceb7b/>
+<csr-id-380efdfc751a8f51d031e44a664ee9ba37e3c712/>
+<csr-id-aedc02565277f61a0dd0427e4167b1a37a1c02e9/>
 
 ### Chore
 
@@ -59,7 +120,7 @@
 
 <csr-read-only-do-not-edit/>
 
- - 39 commits contributed to the release over the course of 2 calendar days.
+ - 40 commits contributed to the release over the course of 2 calendar days.
  - 32 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -70,6 +131,7 @@
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release lcas v0.1.1 ([`629c18c`](https://github.com/TimelessOS/LCAS/commit/629c18c5ce4ca80dc7651235b48b61569a993363))
     - Create empty changelog.md ([`08edfc3`](https://github.com/TimelessOS/LCAS/commit/08edfc345ba85830ffcfb1e86c9c323b561070ba))
     - Update readme's example ([`1c89112`](https://github.com/TimelessOS/LCAS/commit/1c8911211516e370df1737da098a75847e9975fa))
     - Networking support ([`0b71b17`](https://github.com/TimelessOS/LCAS/commit/0b71b1732d667aa02c0371efe8c69b1a149e4218))
