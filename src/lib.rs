@@ -254,8 +254,6 @@ pub fn install_artifact(artifact_name: &String, store: &Store) -> Result<()> {
 
 #[cfg(feature = "decoding")]
 fn resolve_repo_path(store: &Store, path: &String) -> Result<PathBuf> {
-    use core::error;
-
     if store.cache_path.join(path).exists() {
         return Ok(store.cache_path.join(path));
     }
